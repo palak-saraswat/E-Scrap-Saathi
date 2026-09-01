@@ -427,10 +427,15 @@ export default function RecyclerDashboard() {
                         {txn.collector}
                       </td>
                       <td className="px-4 py-3 text-sm">
-                        <Badge className="bg-green-100 text-green-800 hover:bg-green-100">
-                          <CheckCircle2 className="h-3 w-3 mr-1" />
-                          Completed
-                        </Badge>
+                        <div className="space-y-1">
+                          <Badge className="bg-green-100 text-green-800 hover:bg-green-100">
+                            <CheckCircle2 className="h-3 w-3 mr-1" />
+                            ✅ Completed & Handover Verified
+                          </Badge>
+                          <div className="text-[11px] font-medium text-emerald-700 rounded bg-emerald-50 px-2 py-1 border border-emerald-200">
+                            EPR-CPCB-2026-DEL-92841 — 12.5 kg Copper Wire diverted from landfill - Eligible for Brand EPR Credit
+                          </div>
+                        </div>
                       </td>
                     </tr>
                   ))}
