@@ -1,14 +1,13 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import {
   TrendingUp,
-  AlertCircle,
   CheckCircle2,
   Download,
   Eye,
@@ -52,22 +51,13 @@ interface Transaction {
 
 export default function RecyclerDashboard() {
   const router = useRouter();
-  const [isLoading, setIsLoading] = useState(true);
-  const [facilityName, setFacilityName] = useState('');
-  const [cpcbId, setCpcbId] = useState('');
+  const facilityName = typeof window !== 'undefined' ? localStorage.getItem('recyclerName') || '' : '';
+  const cpcbId = typeof window !== 'undefined' ? localStorage.getItem('recyclerCpcbId') || '' : '';
 
   useEffect(() => {
-    const auth = localStorage.getItem('recyclerAuthenticated');
-    const name = localStorage.getItem('recyclerName');
-    const id = localStorage.getItem('recyclerCpcbId');
-
-    if (auth !== 'true') {
+    if (typeof window !== 'undefined' && localStorage.getItem('recyclerAuthenticated') !== 'true') {
       router.push('/recycler/login');
-    } else {
-      setFacilityName(name || '');
-      setCpcbId(id || '');
     }
-    setIsLoading(false);
   }, [router]);
 
   const handleLogout = () => {
@@ -214,10 +204,6 @@ export default function RecyclerDashboard() {
     return badges[status];
   };
 
-  if (isLoading) {
-    return <div className="min-h-screen bg-slate-50" />;
-  }
-
   return (
     <div className="min-h-screen bg-slate-50">
       {/* Top Navigation Bar */}
@@ -273,13 +259,13 @@ export default function RecyclerDashboard() {
       <div className="max-w-7xl mx-auto px-6 py-8 space-y-8">
         {/* Metrics Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {metrics.map((metric, idx) => {
+          {metrics.map((metric) => {
             const Icon = metric.icon;
             const colorClasses = getColorClasses(metric.color);
 
             return (
               <Card
-                key={idx}
+                key={metric.label}
                 className={`${colorClasses.bg} border ${colorClasses.border} hover:shadow-md transition-shadow`}
               >
                 <CardContent className="pt-6">
@@ -420,7 +406,7 @@ export default function RecyclerDashboard() {
                   </tr>
                 </thead>
                 <tbody>
-                  {transactions.map((txn, idx) => (
+                  {transactions.map((txn) => (
                     <tr
                       key={txn.id}
                       className="border-b border-slate-100 hover:bg-slate-50"
