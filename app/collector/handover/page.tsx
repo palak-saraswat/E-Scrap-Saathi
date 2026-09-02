@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { Suspense, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import { motion } from 'framer-motion';
@@ -21,7 +21,7 @@ function generatePin() {
   return Array.from({ length: 4 }, () => Math.floor(Math.random() * 10));
 }
 
-export default function HandoverPage() {
+function HandoverPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const lotId = searchParams.get('lot_id') ?? 'ESS-92841';
@@ -183,5 +183,13 @@ export default function HandoverPage() {
         </DialogContent>
       </Dialog>
     </main>
+  );
+}
+
+export default function HandoverPage() {
+  return (
+    <Suspense fallback={<main className="mx-auto max-w-md min-h-screen bg-zinc-50 p-4 pb-20" /> }>
+      <HandoverPageContent />
+    </Suspense>
   );
 }

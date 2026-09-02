@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowRight, Sparkles, TrendingUp } from 'lucide-react';
 import { Area, AreaChart, CartesianGrid, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
@@ -84,18 +84,25 @@ async function fetchHistoricalPriceData(categoryKey: CategoryKey): Promise<Trend
 
     if (error || !data || !data.length) return createFallbackTrend(categoryKey);
 
-    return data.map((point) => ({
-      date: formatShortDate(point.recorded_date),
-      price: Number(point.avg_price_per_kg),
-      high: Number(point.high_price_per_kg),
-      low: Number(point.low_price_per_kg),
+    const historyRows = (data || []) as Array<{
+      recorded_date: string;
+      avg_price_per_kg: number | string | null;
+      high_price_per_kg: number | string | null;
+      low_price_per_kg: number | string | null;
+    }>;
+
+    return historyRows.map((point) => ({
+      date: formatShortDate(String(point.recorded_date)),
+      price: Number(point.avg_price_per_kg ?? 0),
+      high: Number(point.high_price_per_kg ?? 0),
+      low: Number(point.low_price_per_kg ?? 0),
     }));
   } catch {
     return createFallbackTrend(categoryKey);
   }
 }
 
-export default function CollectorTrendsPage() {
+function CollectorTrendsPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const categoryFromUrl = resolveCategory(searchParams.get('category'));
@@ -271,5 +278,13 @@ export default function CollectorTrendsPage() {
         </Button>
       </div>
     </main>
+  );
+}
+
+export default function CollectorTrendsPage() {
+  return (
+    <Suspense fallback={<main className="mx-auto max-w-md min-h-screen bg-zinc-50 p-4 pb-24" /> }>
+      <CollectorTrendsPageContent />
+    </Suspense>
   );
 }

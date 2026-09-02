@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ChevronRight, MapPinned, ShieldCheck, Sparkles, Truck } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -14,7 +14,7 @@ const tickerMessages = [
   'Locking verified recycler pickup...',
 ];
 
-export default function CollectorNegotiatePage() {
+function CollectorNegotiatePageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isNegotiating, setIsNegotiating] = useState(true);
@@ -178,5 +178,13 @@ export default function CollectorNegotiatePage() {
         )}
       </div>
     </main>
+  );
+}
+
+export default function CollectorNegotiatePage() {
+  return (
+    <Suspense fallback={<main className="mx-auto max-w-md min-h-screen bg-zinc-50 p-4 pb-24" /> }>
+      <CollectorNegotiatePageContent />
+    </Suspense>
   );
 }

@@ -31,15 +31,17 @@ export async function POST(request: Request) {
         .eq('phone', normalizedPhone)
         .maybeSingle();
 
-      if (existing?.id) {
+      const existingProfile = (existing || null) as { id?: string; phone?: string; name?: string } | null;
+
+      if (existingProfile?.id) {
         await supabase
           .from('collector_profiles')
           .update({
             trust_score: updatedTrust,
             total_earnings: updatedEarnings,
             weight_accuracy_pct: weightAccuracyPct,
-          })
-          .eq('id', existing.id);
+          } as any)
+          .eq('id', existingProfile.id);
       } else {
         await supabase.from('collector_profiles').insert({
           phone: normalizedPhone,
@@ -47,7 +49,7 @@ export async function POST(request: Request) {
           trust_score: updatedTrust,
           total_earnings: updatedEarnings,
           weight_accuracy_pct: weightAccuracyPct,
-        });
+        } as any);
       }
     } catch {
       // Fallback for local/demo mode when Supabase is not ready.

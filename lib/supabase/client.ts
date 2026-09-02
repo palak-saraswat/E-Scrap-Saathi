@@ -4,7 +4,7 @@
  */
 
 import { createBrowserClient } from '@supabase/ssr';
-import { Database } from '@/types/database.types';
+import type { Database } from '@/types/database.types';
 
 export function createClient() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -19,7 +19,6 @@ export function createClient() {
   return createBrowserClient<Database>(supabaseUrl, supabaseAnonKey);
 }
 
-// Singleton instance for client-side usage
 let clientInstance: ReturnType<typeof createClient> | null = null;
 
 export function getSupabaseClient() {
