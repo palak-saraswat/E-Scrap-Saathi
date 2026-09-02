@@ -1,9 +1,10 @@
 'use client';
 
 import Link from 'next/link';
-import { FormEvent, Suspense, useEffect, useState } from 'react';
+import { FormEvent, Suspense, useEffect, useRef, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { ArrowLeft, CheckCircle2, CircuitBoard, Factory, LoaderCircle, Phone } from 'lucide-react';
+import { AlertCircle, ArrowLeft, CheckCircle2, Factory, LoaderCircle, LockKeyhole, Phone, ShieldCheck } from 'lucide-react';
+import { BrandLockup } from '@/components/Navbar';
 import { useLanguage } from '@/components/ecostream/language-provider';
 
 type Role = 'collector' | 'recycler';
@@ -28,6 +29,7 @@ function LoginPageContent() {
   const [loading, setLoading] = useState(false);
   const [verified, setVerified] = useState(false);
   const [error, setError] = useState('');
+  const otpRefs = useRef<Array<HTMLInputElement | null>>([]);
   const hi = language === 'hi';
 
   useEffect(() => {
@@ -36,11 +38,23 @@ function LoginPageContent() {
     return () => window.clearInterval(timer);
   }, [otpSent, seconds]);
 
+  useEffect(() => {
+    if (otpSent) otpRefs.current[0]?.focus();
+  }, [otpSent]);
+
+  // Auto-submit once the final OTP digit is entered
+  useEffect(() => {
+    if (otpSent && otp.every(Boolean) && !loading) {
+      void verifyCollector();
+    }
+  }, [otp, otpSent, loading]);
+
   function selectRole(nextRole: Role) {
     setRole(nextRole);
     setError('');
     setVerified(false);
     setOtpSent(false);
+    setOtp(['', '', '', '']);
   }
 
   async function sendOtp(event: FormEvent) {
@@ -58,8 +72,8 @@ function LoginPageContent() {
     setError('');
   }
 
-  async function verifyCollector(event: FormEvent) {
-    event.preventDefault();
+  async function verifyCollector(event?: FormEvent) {
+    event?.preventDefault();
     if (otp.join('') !== DEMO_OTP) {
       setError(hi ? 'गलत OTP। Demo OTP 1234 है।' : 'Invalid OTP. Use demo OTP 1234.');
       return;
@@ -100,12 +114,33 @@ function LoginPageContent() {
     localStorage.setItem('recyclerGstin', normalizedGstin);
     localStorage.setItem('recyclerCpcbId', normalizedCpcb);
     setLoading(false);
-    setTimeout(() => router.push('/recycler/dashboard'), 900);
+    window.setTimeout(() => router.push('/recycler/dashboard'), 900);
   }
 
   function updateOtp(index: number, value: string) {
-    const digit = value.replace(/\D/g, '').slice(-1);
+    const digits = value.replace(/\D/g, '');
+    if (!digits) {
+      setOtp((current) => current.map((item, itemIndex) => (itemIndex === index ? '' : item)));
+      return;
+    }
+    const digit = digits[digits.length - 1];
     setOtp((current) => current.map((item, itemIndex) => (itemIndex === index ? digit : item)));
+    otpRefs.current[Math.min(index + 1, 3)]?.focus();
+  }
+
+  function handleOtpKeyDown(index: number, event: React.KeyboardEvent<HTMLInputElement>) {
+    if (event.key === 'Backspace' && !otp[index] && index > 0) {
+      setOtp((current) => current.map((item, itemIndex) => (itemIndex === index - 1 ? '' : item)));
+      otpRefs.current[index - 1]?.focus();
+    }
+  }
+
+  function handleOtpPaste(event: React.ClipboardEvent<HTMLInputElement>) {
+    event.preventDefault();
+    const pasted = event.clipboardData.getData('text').replace(/\D/g, '').slice(0, 4);
+    if (!pasted) return;
+    setOtp(Array.from({ length: 4 }, (_, index) => pasted[index] ?? ''));
+    otpRefs.current[Math.min(pasted.length, 4) - 1]?.focus();
   }
 
   return (
@@ -116,12 +151,7 @@ function LoginPageContent() {
             <ArrowLeft className="h-4 w-4" />
             {hi ? 'होम' : 'Back to Home'}
           </Link>
-          <Link href="/" className="flex items-center gap-2 font-bold text-blue-950">
-            <span className="flex h-9 w-9 items-center justify-center bg-blue-900 text-white">
-              <CircuitBoard className="h-5 w-5" />
-            </span>
-            E-Scrap<span className="text-emerald-600">-Saathi</span>
-          </Link>
+          <BrandLockup />
           <button type="button" onClick={toggleLanguage} className="border border-slate-200 px-3 py-2 text-xs font-bold text-blue-900">
             {hi ? 'English' : 'हिंदी'}
           </button>
@@ -155,93 +185,144 @@ function LoginPageContent() {
 
           {verified ? (
             <div className="mt-5 border border-emerald-200 bg-emerald-50 p-8 text-center">
-              <CheckCircle2 className="mx-auto h-8 w-8 text-emerald-600" />
-              <p className="mt-4 text-lg font-bold text-emerald-900">{hi ? 'सत्यापन सफल' : 'Verification complete'}</p>
-              <p className="mt-2 text-sm text-emerald-800">{hi ? 'रीसाइक्लर डैशबोर्ड पर जाएँ।' : 'Redirecting to the recycler dashboard.'}</p>
+              <CheckCircle2 className="mx-auto h-12 w-12 text-emerald-600" />
+              <h2 className="mt-4 text-xl font-bold text-blue-950">CPCB Authorized / सरकारी मान्यता प्राप्त</h2>
+              <p className="mt-2 text-sm text-slate-600">{DEMO_RECYCLER.name}</p>
+              <p className="mt-4 text-xs text-emerald-700">Redirecting to recycler dashboard...</p>
             </div>
           ) : role === 'collector' ? (
-            <form onSubmit={sendOtp} className="mt-5 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-              <div className="space-y-1">
-                <label className="text-sm font-semibold text-slate-700">{hi ? 'मोबाइल नंबर' : 'Mobile Number'}</label>
-                <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3">
-                  <Phone className="h-4 w-4 text-slate-500" />
-                  <input
-                    value={phone}
-                    onChange={(event) => setPhone(event.target.value)}
-                    placeholder={hi ? '10 अंकों का नंबर' : '10-digit mobile'}
-                    className="w-full bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-400"
-                    maxLength={10}
-                  />
-                </div>
+            <form onSubmit={otpSent ? verifyCollector : sendOtp} className="mt-5 space-y-5 border border-slate-200 bg-white p-6 shadow-sm">
+              <div>
+                <h2 className="text-xl font-bold text-blue-950">{otpSent ? 'Enter OTP / OTP डालें' : 'Mobile verification / मोबाइल सत्यापन'}</h2>
+                <p className="mt-1 text-sm text-slate-500">{otpSent ? `OTP sent to +91 ${phone.replace(/\D/g, '')}` : 'Use your 10-digit mobile number to continue.'}</p>
               </div>
 
-              {error ? <p className="mt-3 text-sm font-medium text-red-600">{error}</p> : null}
-
               {!otpSent ? (
-                <button type="submit" disabled={loading} className="mt-5 flex h-12 w-full items-center justify-center rounded-2xl bg-blue-900 text-sm font-bold text-white disabled:opacity-70">
-                  {loading ? <LoaderCircle className="h-5 w-5 animate-spin" /> : hi ? 'OTP भेजें' : 'Send OTP'}
-                </button>
-              ) : (
-                <div className="mt-5 space-y-4">
-                  <div className="space-y-2">
-                    <label className="text-sm font-semibold text-slate-700">{hi ? 'OTP दर्ज करें' : 'Enter OTP'}</label>
-                    <div className="flex items-center justify-between gap-2">
-                      {[0, 1, 2, 3].map((index) => (
-                        <input
-                          key={index}
-                          value={otp[index]}
-                          onChange={(event) => updateOtp(index, event.target.value)}
-                          className="h-12 w-12 rounded-xl border border-slate-200 bg-slate-50 text-center text-lg font-bold text-slate-900 outline-none focus:border-blue-900"
-                          maxLength={1}
-                        />
-                      ))}
+                <>
+                  <label className="block text-sm font-bold text-blue-950">
+                    Mobile number
+                    <div className="mt-2 flex">
+                      <span className="flex items-center border border-r-0 border-slate-200 bg-slate-50 px-3 text-sm font-bold text-slate-600">+91</span>
+                      <input
+                        required
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        maxLength={10}
+                        value={phone}
+                        onChange={(event) => setPhone(event.target.value.replace(/\D/g, '').slice(0, 10))}
+                        className="h-11 w-full border border-slate-200 px-3 font-mono text-slate-900"
+                        placeholder="9876543210"
+                      />
                     </div>
-                  </div>
-
-                  <div className="flex items-center justify-between text-xs text-slate-500">
-                    <span>{hi ? 'OTP नहीं मिला?' : "Didn't receive OTP?"}</span>
-                    <button type="button" onClick={() => setOtpSent(false)} className="font-semibold text-blue-900">
-                      {hi ? 'फिर से भेजें' : 'Resend'}
-                    </button>
-                  </div>
-
-                  <button type="button" onClick={verifyCollector} disabled={loading} className="flex h-12 w-full items-center justify-center rounded-2xl bg-emerald-600 text-sm font-bold text-white disabled:opacity-70">
-                    {loading ? <LoaderCircle className="h-5 w-5 animate-spin" /> : hi ? 'लॉगिन करें' : 'Verify & Login'}
+                  </label>
+                  <p className="text-xs text-slate-500">Demo: Use any 10-digit number (e.g. 9876543210)</p>
+                  <button disabled={loading} className="flex h-11 w-full items-center justify-center gap-2 bg-emerald-600 font-bold text-white hover:bg-emerald-700 disabled:opacity-70">
+                    {loading && <LoaderCircle className="h-4 w-4 animate-spin" />}
+                    Get OTP / ओटीपी प्राप्त करें
                   </button>
-                </div>
+                </>
+              ) : (
+                <>
+                  <div className="flex gap-3">
+                    {otp.map((digit, index) => (
+                      <input
+                        key={index}
+                        ref={(element) => {
+                          otpRefs.current[index] = element;
+                        }}
+                        aria-label={`OTP digit ${index + 1}`}
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        autoComplete="one-time-code"
+                        maxLength={1}
+                        value={digit}
+                        onChange={(event) => updateOtp(index, event.target.value)}
+                        onKeyDown={(event) => handleOtpKeyDown(index, event)}
+                        onPaste={handleOtpPaste}
+                        className="h-14 w-12 border border-slate-200 text-center text-2xl font-bold text-blue-900 focus:border-blue-900 focus:outline-none"
+                      />
+                    ))}
+                  </div>
+                  <p className="text-xs text-slate-500">Demo OTP: 1234</p>
+                  <button
+                    type="button"
+                    disabled={seconds > 0}
+                    onClick={() => {
+                      setSeconds(30);
+                      setOtp(['', '', '', '']);
+                      setError('');
+                      otpRefs.current[0]?.focus();
+                    }}
+                    className="text-sm font-bold text-blue-900 disabled:text-slate-400"
+                  >
+                    {seconds > 0 ? `Resend OTP in ${seconds}s` : 'Resend OTP / ओटीपी दोबारा भेजें'}
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={loading || otp.join('').length !== 4}
+                    className="flex h-11 w-full items-center justify-center gap-2 bg-emerald-600 font-bold text-white hover:bg-emerald-700 disabled:opacity-70"
+                  >
+                    {loading && <LoaderCircle className="h-4 w-4 animate-spin" />}
+                    Verify & Enter Dashboard / सत्यापन करें
+                  </button>
+                </>
               )}
             </form>
           ) : (
-            <form onSubmit={verifyRecycler} className="mt-5 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-              <div className="space-y-4">
-                <div className="space-y-1">
-                  <label className="text-sm font-semibold text-slate-700">GSTIN</label>
-                  <input
-                    value={gstin}
-                    onChange={(event) => setGstin(event.target.value)}
-                    className="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-900 outline-none focus:border-blue-900"
-                    placeholder="07AACFY8976B1Z5"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-sm font-semibold text-slate-700">CPCB Registration ID</label>
-                  <input
-                    value={cpcb}
-                    onChange={(event) => setCpcb(event.target.value)}
-                    className="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-900 outline-none focus:border-blue-900"
-                    placeholder="CPCB/REG/2024/001234"
-                  />
-                </div>
-
-                {error ? <p className="text-sm font-medium text-red-600">{error}</p> : null}
-
-                <button type="submit" disabled={loading} className="flex h-12 w-full items-center justify-center rounded-2xl bg-blue-900 text-sm font-bold text-white disabled:opacity-70">
-                  {loading ? <LoaderCircle className="h-5 w-5 animate-spin" /> : hi ? 'सत्यापित करें' : 'Verify Facility'}
-                </button>
+            <form onSubmit={verifyRecycler} className="mt-5 space-y-5 border border-slate-200 bg-white p-6 shadow-sm">
+              <div>
+                <h2 className="text-xl font-bold text-blue-950">GSTIN + CPCB verification</h2>
+                <p className="mt-1 text-sm text-slate-500">Only registered recycling facilities can enter.</p>
               </div>
+
+              <label className="block text-sm font-bold text-blue-950">
+                GSTIN
+                <input
+                  required
+                  maxLength={15}
+                  value={gstin}
+                  onChange={(event) => setGstin(event.target.value.toUpperCase().slice(0, 15))}
+                  className="mt-2 h-11 w-full border border-slate-200 px-3 font-mono text-slate-900 focus:border-blue-900 focus:outline-none"
+                  placeholder="07AACFY8976B1Z5"
+                />
+                <span className="mt-1 block text-xs font-normal text-slate-500">15-character Goods & Services Tax ID</span>
+              </label>
+
+              <label className="block text-sm font-bold text-blue-950">
+                CPCB Registration ID
+                <input
+                  required
+                  value={cpcb}
+                  onChange={(event) => setCpcb(event.target.value.toUpperCase())}
+                  className="mt-2 h-11 w-full border border-slate-200 px-3 font-mono text-slate-900 focus:border-blue-900 focus:outline-none"
+                  placeholder="CPCB/REG/2024/001234"
+                />
+              </label>
+
+              <button disabled={loading} className="flex h-11 w-full items-center justify-center gap-2 bg-emerald-600 font-bold text-white hover:bg-emerald-700 disabled:opacity-70">
+                {loading ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
+                Verify CPCB Authorization / CPCB सत्यापन करें
+              </button>
+
+              <p className="text-xs text-slate-500">
+                Demo GSTIN: 07AACFY8976B1Z5
+                <br />
+                Demo CPCB ID: CPCB/REG/2024/001234
+              </p>
             </form>
           )}
+
+          {error && (
+            <div className="mt-4 flex gap-2 border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              {error}
+            </div>
+          )}
+
+          <div className="mt-5 flex items-center justify-center gap-2 text-xs text-slate-500">
+            <LockKeyhole className="h-4 w-4 text-emerald-600" />
+            Secure demo verification
+          </div>
         </section>
       </div>
     </main>
