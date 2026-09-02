@@ -1,450 +1,60 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Card, CardContent } from '@/components/ui/card';
+import { Check, CheckCircle2, Download, Eye, Factory, MessageSquare, Search, ShieldCheck, Star, TrendingUp, X, Zap } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
-import {
-  TrendingUp,
-  CheckCircle2,
-  Download,
-  Eye,
-  Zap,
-  LogOut,
-} from 'lucide-react';
+import { ThemeToggle } from '@/components/ecostream/theme-toggle';
 
-interface MetricCard {
-  label: string;
-  value: string;
-  unit?: string;
-  trend?: string;
-  icon: React.ComponentType<{ className?: string }>;
-  color: 'blue' | 'amber' | 'green' | 'purple';
-}
+type Status = 'Pending' | 'Reviewed' | 'Approved' | 'Rejected';
+type Tab = 'dashboard' | 'incoming' | 'negotiations';
+type Lot = { id: string; material: string; materialHi: string; weight: number; collector: string; rating: number; date: string; status: Status; askingRate: number; purity: string };
+type Offer = { id: string; collector: string; material: string; weight: number; askRate: number; targetRate: number; status: 'Pending' | 'Counter Sent' | 'Accepted'; message: string };
 
-interface IncomingLot {
-  id: string;
-  material: string;
-  weight: string;
-  collector: string;
-  status: 'pending' | 'reviewed' | 'offered';
-}
-
-interface Negotiation {
-  id: string;
-  material: string;
-  quantity: string;
-  suggestedPrice: string;
-  offerCount: number;
-}
-
-interface Transaction {
-  id: string;
-  date: string;
-  material: string;
-  quantity: string;
-  price: string;
-  collector: string;
-}
+const initialLots: Lot[] = [
+  { id: 'LOT-24091', material: 'Copper Cable', materialHi: 'तांबा तार', weight: 125, collector: 'Amit Kumar', rating: 4.9, date: '02 Sep 2026', status: 'Pending', askingRate: 470, purity: 'Grade A - 98% Copper' },
+  { id: 'LOT-24090', material: 'PCB Board', materialHi: 'मदरबोर्ड', weight: 250, collector: 'Rajesh Singh', rating: 4.7, date: '02 Sep 2026', status: 'Reviewed', askingRate: 335, purity: 'Grade A - high yield' },
+  { id: 'LOT-24089', material: 'Lithium Battery', materialHi: 'बैटरी', weight: 80.2, collector: 'Priya Sharma', rating: 4.8, date: '01 Sep 2026', status: 'Approved', askingRate: 180, purity: 'Grade B - tested cells' },
+  { id: 'LOT-24088', material: 'Mixed E-waste', materialHi: 'मिक्स ई-कचरा', weight: 420.5, collector: 'Dev Patel', rating: 4.5, date: '01 Sep 2026', status: 'Pending', askingRate: 210, purity: 'Grade B - sorted mix' },
+  { id: 'LOT-24087', material: 'Aluminium', materialHi: 'एल्युमिनियम', weight: 185, collector: 'Suresh Yadav', rating: 4.6, date: '31 Aug 2026', status: 'Reviewed', askingRate: 185, purity: 'Grade A - clean' },
+];
+const initialOffers: Offer[] = [
+  { id: 'OFF-2048', collector: 'Amit Kumar', material: '125 kg Copper', weight: 125, askRate: 470, targetRate: 460, status: 'Pending', message: 'Pickup requested this week' },
+  { id: 'OFF-2047', collector: 'Rajesh Singh', material: '250 kg PCB', weight: 250, askRate: 335, targetRate: 325, status: 'Pending', message: 'GST invoice available' },
+];
 
 export default function RecyclerDashboard() {
   const router = useRouter();
-  const facilityName = typeof window !== 'undefined' ? localStorage.getItem('recyclerName') || '' : '';
-  const cpcbId = typeof window !== 'undefined' ? localStorage.getItem('recyclerCpcbId') || '' : '';
+  const [activeTab, setActiveTab] = useState<Tab>('dashboard');
+  const [lots, setLots] = useState(initialLots);
+  const [offers, setOffers] = useState(initialOffers);
+  const [selectedLot, setSelectedLot] = useState<Lot | null>(null);
+  const [search, setSearch] = useState('');
+  const [counterRate, setCounterRate] = useState('460');
+  const [counterMessage, setCounterMessage] = useState('Pickup tomorrow morning if ₹460/kg is agreed');
+  const [toast, setToast] = useState('');
+  const [facilityName] = useState(() => typeof window === 'undefined' ? 'EcoRecycle Solutions' : localStorage.getItem('recyclerName') || 'EcoRecycle Solutions');
 
-  useEffect(() => {
-    if (typeof window !== 'undefined' && localStorage.getItem('recyclerAuthenticated') !== 'true') {
-      router.push('/recycler/login');
-    }
-  }, [router]);
+  useEffect(() => { if (localStorage.getItem('recyclerAuthenticated') !== 'true') router.push('/login?role=recycler'); }, [router]);
+  useEffect(() => { const syncTab = () => { const hash = window.location.hash; setActiveTab(hash === '#incoming-lots' ? 'incoming' : hash === '#negotiations' ? 'negotiations' : 'dashboard'); }; syncTab(); window.addEventListener('hashchange', syncTab); return () => window.removeEventListener('hashchange', syncTab); }, []);
+  useEffect(() => { if (!toast) return; const timer = window.setTimeout(() => setToast(''), 2800); return () => window.clearTimeout(timer); }, [toast]);
 
-  const handleLogout = () => {
-    localStorage.removeItem('recyclerAuthenticated');
-    localStorage.removeItem('recyclerName');
-    localStorage.removeItem('recyclerCpcbId');
-    localStorage.removeItem('recyclerGstin');
-    router.push('/recycler/login');
-  };
+  const filteredLots = useMemo(() => { const term = search.toLowerCase(); return lots.filter((lot) => `${lot.id} ${lot.material} ${lot.collector} ${lot.status}`.toLowerCase().includes(term)); }, [lots, search]);
+  const setTab = (tab: Tab) => { setActiveTab(tab); window.history.replaceState(null, '', tab === 'incoming' ? '#incoming-lots' : tab === 'negotiations' ? '#negotiations' : window.location.pathname); };
+  const updateStatus = (status: Status) => { if (!selectedLot) return; setLots((current) => current.map((lot) => lot.id === selectedLot.id ? { ...lot, status } : lot)); setSelectedLot({ ...selectedLot, status }); setToast(status === 'Approved' ? 'Pickup approved and scheduled successfully.' : status === 'Rejected' ? 'Lot rejected and collector notified.' : 'Lot updated successfully.'); };
+  const downloadManifest = () => { const content = `CPCB Manifest\nLot: ${selectedLot?.id}\nMaterial: ${selectedLot?.material}\nWeight: ${selectedLot?.weight} kg`; const link = document.createElement('a'); link.href = URL.createObjectURL(new Blob([content], { type: 'text/plain' })); link.download = `${selectedLot?.id}-manifest.txt`; link.click(); URL.revokeObjectURL(link.href); setToast('CPCB manifest downloaded.'); };
+  const sendCounter = (offerId: string) => { setOffers((current) => current.map((offer) => offer.id === offerId ? { ...offer, status: 'Counter Sent', message: counterMessage } : offer)); setToast('Counter offer sent to collector.'); };
+  const acceptOffer = (offerId: string) => { setOffers((current) => current.map((offer) => offer.id === offerId ? { ...offer, status: 'Accepted' } : offer)); setToast('Deal accepted. Handover workflow unlocked.'); };
+  const logout = () => { localStorage.removeItem('recyclerAuthenticated'); router.push('/login?role=recycler'); };
+  const statusClass = (status: Status | Offer['status']) => status === 'Approved' || status === 'Accepted' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : status === 'Rejected' ? 'border-red-200 bg-red-50 text-red-700' : status === 'Reviewed' || status === 'Counter Sent' ? 'border-blue-200 bg-blue-50 text-blue-700' : 'border-amber-200 bg-amber-50 text-amber-700';
 
-  const metrics: MetricCard[] = [
-    {
-      label: 'Total Inbound E-Waste',
-      value: '156.8',
-      unit: 'MT',
-      trend: '+12% this month',
-      icon: TrendingUp,
-      color: 'blue',
-    },
-    {
-      label: 'Active Negotiations',
-      value: '23',
-      unit: 'Offers',
-      trend: '8 awaiting response',
-      icon: Zap,
-      color: 'amber',
-    },
-    {
-      label: "Today's Scheduled Handovers",
-      value: '5',
-      unit: 'Lots',
-      trend: '127.5 kg total',
-      icon: CheckCircle2,
-      color: 'green',
-    },
-    {
-      label: 'Avg Buying Price Index',
-      value: '₹312',
-      unit: '/kg',
-      trend: '-2.1% vs. yesterday',
-      icon: TrendingUp,
-      color: 'purple',
-    },
-  ];
-
-  const incomingLots: IncomingLot[] = [
-    {
-      id: '1',
-      material: 'Copper Cables',
-      weight: '12.5 kg',
-      collector: 'Amit Kumar',
-      status: 'pending',
-    },
-    {
-      id: '2',
-      material: 'PCB Boards',
-      weight: '25 kg',
-      collector: 'Rajesh Singh',
-      status: 'reviewed',
-    },
-    {
-      id: '3',
-      material: 'Lithium Batteries',
-      weight: '8.2 kg',
-      collector: 'Priya Sharma',
-      status: 'offered',
-    },
-    {
-      id: '4',
-      material: 'CRT Monitors',
-      weight: '42.5 kg',
-      collector: 'Dev Patel',
-      status: 'pending',
-    },
-  ];
-
-  const negotiations: Negotiation[] = [
-    {
-      id: '1',
-      material: 'Copper Cables (Bulk)',
-      quantity: '250 kg',
-      suggestedPrice: '₹425/kg',
-      offerCount: 3,
-    },
-    {
-      id: '2',
-      material: 'Mixed PCBs (Grade A)',
-      quantity: '180 kg',
-      suggestedPrice: '₹315/kg',
-      offerCount: 5,
-    },
-    {
-      id: '3',
-      material: 'Lithium Batteries',
-      quantity: '95 kg',
-      suggestedPrice: '₹150/kg',
-      offerCount: 2,
-    },
-  ];
-
-  const transactions: Transaction[] = [
-    {
-      id: '1',
-      date: '2024-08-29',
-      material: 'Copper Cables',
-      quantity: '50 kg',
-      price: '₹21,250',
-      collector: 'Amit Kumar',
-    },
-    {
-      id: '2',
-      date: '2024-08-28',
-      material: 'PCB Boards',
-      quantity: '75 kg',
-      price: '₹23,625',
-      collector: 'Rajesh Singh',
-    },
-    {
-      id: '3',
-      date: '2024-08-27',
-      material: 'Mixed E-waste',
-      quantity: '120 kg',
-      price: '₹28,500',
-      collector: 'Priya Sharma',
-    },
-  ];
-
-  const getColorClasses = (color: string) => {
-    const colors: Record<string, { bg: string; icon: string; border: string }> = {
-      blue: { bg: 'bg-blue-50', icon: 'text-blue-600', border: 'border-blue-200' },
-      amber: { bg: 'bg-amber-50', icon: 'text-amber-600', border: 'border-amber-200' },
-      green: { bg: 'bg-green-50', icon: 'text-green-600', border: 'border-green-200' },
-      purple: { bg: 'bg-purple-50', icon: 'text-purple-600', border: 'border-purple-200' },
-    };
-    return colors[color];
-  };
-
-  const getStatusBadge = (status: IncomingLot['status']) => {
-    const badges = {
-      pending: { label: 'Pending Review', color: 'bg-slate-100 text-slate-700' },
-      reviewed: { label: 'Reviewed', color: 'bg-blue-100 text-blue-700' },
-      offered: { label: 'Offer Made', color: 'bg-green-100 text-green-700' },
-    };
-    return badges[status];
-  };
-
-  return (
-    <div className="min-h-screen bg-slate-50">
-      {/* Top Navigation Bar */}
-      <nav className="bg-white border-b border-slate-200 shadow-sm sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className="flex flex-col">
-              <h1 className="text-xl font-bold text-slate-900">
-                E-Scrap-Saathi
-              </h1>
-              <p className="text-xs text-slate-600">Recycler Hub</p>
-            </div>
-          </div>
-
-          <div className="flex-1 ml-12 max-w-md">
-            <div className="flex items-center gap-2">
-              <div className="flex-1">
-                <h2 className="font-semibold text-slate-900 text-sm">
-                  {facilityName}
-                </h2>
-                <p className="text-xs text-slate-600">{cpcbId}</p>
-              </div>
-              <Badge className="bg-green-600 hover:bg-green-700 flex items-center gap-1 whitespace-nowrap">
-                <CheckCircle2 className="h-3 w-3" />
-                Verified
-              </Badge>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-6">
-            <div className="text-right">
-              <p className="text-xs text-slate-600">Active Capacity</p>
-              <p className="font-semibold text-slate-900">65% (13.5 / 20 MT)</p>
-              <div className="w-32 h-1.5 bg-slate-200 rounded-full mt-1 overflow-hidden">
-                <div className="h-full w-[65%] bg-gradient-to-r from-amber-500 to-orange-500" />
-              </div>
-            </div>
-
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleLogout}
-              className="text-red-600 hover:text-red-700 hover:bg-red-50"
-            >
-              <LogOut className="h-4 w-4 mr-1" />
-              Logout
-            </Button>
-          </div>
-        </div>
-      </nav>
-
-      {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-6 py-8 space-y-8">
-        {/* Metrics Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {metrics.map((metric) => {
-            const Icon = metric.icon;
-            const colorClasses = getColorClasses(metric.color);
-
-            return (
-              <Card
-                key={metric.label}
-                className={`${colorClasses.bg} border ${colorClasses.border} hover:shadow-md transition-shadow`}
-              >
-                <CardContent className="pt-6">
-                  <div className="flex items-start justify-between mb-4">
-                    <div>
-                      <p className="text-sm text-slate-600 font-medium">{metric.label}</p>
-                      <div className="flex items-baseline gap-2 mt-2">
-                        <span className="text-2xl font-bold text-slate-900">
-                          {metric.value}
-                        </span>
-                        {metric.unit && (
-                          <span className="text-sm text-slate-600">{metric.unit}</span>
-                        )}
-                      </div>
-                    </div>
-                    <Icon className={`h-5 w-5 ${colorClasses.icon}`} />
-                  </div>
-                  {metric.trend && (
-                    <p className="text-xs text-slate-600">{metric.trend}</p>
-                  )}
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
-
-        {/* Tabs Section */}
-        <Tabs defaultValue="incoming" className="w-full">
-          <TabsList className="grid w-full grid-cols-3 bg-slate-200">
-            <TabsTrigger value="incoming">Incoming Lots & Offers</TabsTrigger>
-            <TabsTrigger value="negotiations">
-              ⚡ Saathi Broker Negotiations
-            </TabsTrigger>
-            <TabsTrigger value="completed">Completed Transactions</TabsTrigger>
-          </TabsList>
-
-          {/* Tab 1: Incoming Lots */}
-          <TabsContent value="incoming" className="space-y-4 mt-6">
-            <div className="grid gap-4">
-              {incomingLots.map((lot) => {
-                const badge = getStatusBadge(lot.status);
-                return (
-                  <Card key={lot.id} className="hover:shadow-md transition-shadow">
-                    <CardContent className="p-4">
-                      <div className="flex items-center justify-between mb-3">
-                        <h3 className="font-semibold text-zinc-900">{lot.material}</h3>
-                        <Badge variant="outline" className={badge.color}>
-                          {badge.label}
-                        </Badge>
-                      </div>
-                      <div className="grid grid-cols-3 gap-4 text-sm mb-4">
-                        <div>
-                          <p className="text-slate-600">Weight</p>
-                          <p className="font-semibold text-slate-900">{lot.weight}</p>
-                        </div>
-                        <div>
-                          <p className="text-slate-600">Collector</p>
-                          <p className="font-semibold text-slate-900">{lot.collector}</p>
-                        </div>
-                        <div>
-                          <p className="text-slate-600">Action</p>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="mt-1 h-7"
-                          >
-                            <Eye className="h-3 w-3 mr-1" />
-                            Review
-                          </Button>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })}
-            </div>
-          </TabsContent>
-
-          {/* Tab 2: Saathi Broker Negotiations */}
-          <TabsContent value="negotiations" className="space-y-4 mt-6">
-            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 flex gap-3 mb-4">
-              <Zap className="h-5 w-5 text-amber-600 flex-shrink-0" />
-              <div className="text-sm text-amber-800">
-                <p className="font-semibold">AI-Powered Negotiations</p>
-                <p className="text-xs mt-1">
-                  Saathi agent actively negotiates bulk material prices based on market trends
-                  and buyer demand.
-                </p>
-              </div>
-            </div>
-
-            <div className="grid gap-4">
-              {negotiations.map((neg) => (
-                <Card key={neg.id} className="hover:shadow-md transition-shadow">
-                  <CardContent className="p-4">
-                    <div className="flex items-start justify-between mb-3">
-                      <div>
-                        <h3 className="font-semibold text-zinc-900">{neg.material}</h3>
-                        <p className="text-sm text-slate-600 mt-1">{neg.quantity}</p>
-                      </div>
-                      <Badge className="bg-green-600 hover:bg-green-700">
-                        {neg.offerCount} Offers
-                      </Badge>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <p className="text-lg font-bold text-green-600">
-                        {neg.suggestedPrice}
-                      </p>
-                      <Button size="sm" className="bg-green-600 hover:bg-green-700">
-                        Review Offers
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          </TabsContent>
-
-          {/* Tab 3: Completed Transactions */}
-          <TabsContent value="completed" className="space-y-4 mt-6">
-            <div className="flex justify-end mb-4">
-              <Button variant="outline" size="sm">
-                <Download className="h-4 w-4 mr-2" />
-                Export CSV
-              </Button>
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-slate-100 border-b border-slate-200">
-                  <tr className="text-left text-sm font-semibold text-slate-700">
-                    <th className="px-4 py-3">Date</th>
-                    <th className="px-4 py-3">Material</th>
-                    <th className="px-4 py-3">Quantity</th>
-                    <th className="px-4 py-3">Total Price</th>
-                    <th className="px-4 py-3">Collector</th>
-                    <th className="px-4 py-3">Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {transactions.map((txn) => (
-                    <tr
-                      key={txn.id}
-                      className="border-b border-slate-100 hover:bg-slate-50"
-                    >
-                      <td className="px-4 py-3 text-sm text-slate-900">
-                        {txn.date}
-                      </td>
-                      <td className="px-4 py-3 text-sm font-medium text-slate-900">
-                        {txn.material}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-slate-900">
-                        {txn.quantity}
-                      </td>
-                      <td className="px-4 py-3 text-sm font-semibold text-green-600">
-                        {txn.price}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-slate-900">
-                        {txn.collector}
-                      </td>
-                      <td className="px-4 py-3 text-sm">
-                        <div className="space-y-1">
-                          <Badge className="bg-green-100 text-green-800 hover:bg-green-100">
-                            <CheckCircle2 className="h-3 w-3 mr-1" />
-                            ✅ Completed & Handover Verified
-                          </Badge>
-                          <div className="text-[11px] font-medium text-emerald-700 rounded bg-emerald-50 px-2 py-1 border border-emerald-200">
-                            EPR-CPCB-2026-DEL-92841 — 12.5 kg Copper Wire diverted from landfill - Eligible for Brand EPR Credit
-                          </div>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </TabsContent>
-        </Tabs>
-      </div>
-    </div>
-  );
+  return <div className="min-h-screen bg-slate-50 text-slate-950"><header className="border-b border-slate-200 bg-white"><div className="mx-auto flex max-w-[1440px] items-center justify-between gap-4 px-5 py-4 lg:px-10"><div className="flex items-center gap-3"><div className="flex h-11 w-11 items-center justify-center bg-blue-900 text-white"><Factory className="h-6 w-6" /></div><div><p className="font-bold text-blue-950">E-Scrap<span className="text-emerald-600">-Saathi</span></p><p className="text-[10px] uppercase tracking-[.18em] text-slate-500">Recycler command center</p></div></div><div className="flex items-center gap-3"><div className="hidden text-right sm:block"><p className="text-sm font-bold text-blue-950">{facilityName}</p><p className="text-xs text-slate-500">CPCB/REG/2024/001234</p></div><Badge className="hidden border-emerald-200 bg-emerald-50 text-emerald-700 sm:flex"><ShieldCheck className="mr-1 h-3 w-3" />CPCB Verified</Badge><ThemeToggle /><Button variant="ghost" size="icon" onClick={logout} aria-label="Log out"><LogOutIcon /></Button></div></div><div className="border-t border-blue-100 px-5 py-2 text-center text-xs font-semibold text-slate-600">● Live Bhav: <span className="text-emerald-700">Copper ₹470/kg</span> · <span className="text-emerald-700">PCB ₹335/kg</span> · <span className="text-emerald-700">Battery ₹180/kg</span></div></header><main className="mx-auto max-w-[1440px] space-y-6 px-5 py-6 lg:px-10 lg:py-8"><div className="mt-6 flex flex-wrap items-center justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-[.2em] text-emerald-700">Live operations · 02 Sep 2026</p><h1 className="mt-2 text-3xl font-bold text-blue-950">Good morning, {facilityName}.</h1><p className="mt-1 text-sm text-slate-500">Bulk supply, compliance और payments एक ही जगह।</p></div><div className="flex border border-slate-200 bg-white p-1"><button type="button" onClick={() => setTab('dashboard')} className={`px-4 py-2 text-sm font-bold ${activeTab === 'dashboard' ? 'bg-blue-900 text-white' : 'text-slate-600'}`}>Dashboard / डैशबोर्ड</button><button type="button" onClick={() => setTab('incoming')} className={`px-4 py-2 text-sm font-bold ${activeTab === 'incoming' ? 'bg-blue-900 text-white' : 'text-slate-600'}`}>Incoming Lots</button><button type="button" onClick={() => setTab('negotiations')} className={`px-4 py-2 text-sm font-bold ${activeTab === 'negotiations' ? 'bg-blue-900 text-white' : 'text-slate-600'}`}>Negotiations</button></div></div>{activeTab === 'dashboard' && <><section className="grid gap-4 md:grid-cols-3"><Metric icon={<TrendingUp />} label="Total Inbound E-Waste" value="156.8 MT" detail="+12% this month" /><Metric icon={<Zap />} label="Active Negotiations" value="23 offers" detail="8 awaiting response" /><Metric icon={<CheckCircle2 />} label="Scheduled Handovers" value="05 lots" detail="127.5 kg total" /></section><Capacity /><section className="border border-slate-200 bg-white p-5"><div className="flex items-center justify-between"><div><p className="text-xs font-bold uppercase tracking-wider text-emerald-700">Recent inbound summary</p><h2 className="mt-1 text-xl font-bold text-blue-950">Latest lots needing attention</h2></div><Button variant="outline" onClick={() => setTab('incoming')}>View all lots <ArrowRightIcon /></Button></div><div className="mt-4 grid gap-3 md:grid-cols-3">{lots.slice(0, 3).map((lot) => <button type="button" key={lot.id} onClick={() => { setSelectedLot(lot); setTab('incoming'); }} className="border border-slate-200 p-4 text-left hover:border-emerald-400"><p className="font-mono text-xs font-bold text-blue-900">{lot.id}</p><p className="mt-2 font-bold text-blue-950">{lot.material}</p><p className="mt-1 text-xs text-slate-500">{lot.weight} kg · {lot.collector}</p><Badge className={`mt-3 border ${statusClass(lot.status)}`}>{lot.status}</Badge></button>)}</div></section></>}{activeTab === 'incoming' && <section id="incoming-lots" className="border border-slate-200 bg-white"><div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 p-5"><div><p className="text-xs font-bold uppercase tracking-wider text-emerald-700">Intake stream</p><h2 className="mt-1 text-xl font-bold text-blue-950">Incoming lots / आने वाले लॉट</h2></div><label className="flex items-center gap-2 border border-slate-200 px-3"><Search className="h-4 w-4 text-slate-400" /><input value={search} onChange={(event) => setSearch(event.target.value)} className="h-10 w-56 outline-none" placeholder="Search lot or collector" /></label></div><div className="overflow-x-auto"><table className="w-full min-w-[900px] text-left text-sm"><thead className="bg-slate-50 text-xs uppercase tracking-wider text-slate-500"><tr><th className="px-5 py-3">Lot ID</th><th className="px-5 py-3">Material</th><th className="px-5 py-3">Weight</th><th className="px-5 py-3">Collector</th><th className="px-5 py-3">Rating</th><th className="px-5 py-3">Status</th><th className="px-5 py-3 text-right">Action</th></tr></thead><tbody className="divide-y divide-slate-100">{filteredLots.map((lot) => <tr key={lot.id} className="hover:bg-blue-50/40"><td className="px-5 py-4 font-mono text-xs font-bold text-blue-900">{lot.id}</td><td className="px-5 py-4 font-semibold">{lot.material}<span className="block text-xs font-normal text-slate-500">{lot.materialHi}</span></td><td className="px-5 py-4">{lot.weight.toFixed(1)} kg</td><td className="px-5 py-4">{lot.collector}</td><td className="px-5 py-4 text-amber-600"><Star className="mr-1 inline h-3 w-3 fill-amber-400" />{lot.rating}</td><td className="px-5 py-4"><Badge className={`border ${statusClass(lot.status)}`}>{lot.status}</Badge></td><td className="px-5 py-4 text-right"><Button variant="outline" size="sm" onClick={() => setSelectedLot(lot)}><Eye className="mr-2 h-4 w-4" />Inspect</Button></td></tr>)}</tbody></table></div></section>}{activeTab === 'negotiations' && <Negotiations offers={offers} counterRate={counterRate} setCounterRate={setCounterRate} counterMessage={counterMessage} setCounterMessage={setCounterMessage} onCounter={sendCounter} onAccept={acceptOffer} />}</main>{selectedLot && <InspectionDrawer lot={selectedLot} statusClass={statusClass} onClose={() => setSelectedLot(null)} onUpdate={updateStatus} onManifest={downloadManifest} />}{toast && <div role="status" className="fixed bottom-6 right-6 z-[60] flex items-center gap-3 border border-emerald-200 bg-white px-5 py-4 text-sm font-bold text-blue-950 shadow-lg"><CheckCircle2 className="h-5 w-5 text-emerald-600" />{toast}</div>}</div>;
 }
+
+function Metric({ icon, label, value, detail }: { icon: React.ReactNode; label: string; value: string; detail: string }) { return <div className="border border-slate-200 bg-white p-5"><span className="text-emerald-600">{icon}</span><p className="mt-4 text-xs font-bold uppercase tracking-wider text-slate-500">{label}</p><p className="mt-2 text-3xl font-bold text-blue-950">{value}</p><p className="mt-2 text-xs font-semibold text-emerald-700">{detail}</p></div>; }
+function Capacity() { return <section className="border border-slate-200 bg-white p-5"><div className="flex items-end justify-between"><div><p className="text-xs font-bold uppercase tracking-wider text-emerald-700">Facility capacity</p><h2 className="mt-1 text-2xl font-bold text-blue-950">13.5 <span className="text-sm font-medium text-slate-500">/ 20 MT Capacity Used</span></h2></div><span className="font-bold text-amber-600">67.5%</span></div><div className="mt-4 h-4 bg-slate-100"><div className="h-full bg-emerald-500" style={{ width: '67.5%' }} /></div><div className="mt-2 flex justify-between text-xs text-slate-500"><span>6.5 MT available intake</span><span>CPCB limit: 20 MT</span></div></section>; }
+function Negotiations({ offers, counterRate, setCounterRate, counterMessage, setCounterMessage, onCounter, onAccept }: { offers: Offer[]; counterRate: string; setCounterRate: (value: string) => void; counterMessage: string; setCounterMessage: (value: string) => void; onCounter: (id: string) => void; onAccept: (id: string) => void }) { const [selectedId, setSelectedId] = useState(offers[0]?.id); const offer = offers.find((item) => item.id === selectedId) ?? offers[0]; if (!offer) return null; return <section id="negotiations" className="grid gap-5 lg:grid-cols-[.8fr_1.2fr]"><div className="border border-slate-200 bg-white p-5"><p className="text-xs font-bold uppercase tracking-wider text-emerald-700">Negotiation hub / बातचीत</p><h2 className="mt-1 text-xl font-bold text-blue-950">Active collector offers</h2><div className="mt-4 space-y-3">{offers.map((item) => <button type="button" key={item.id} onClick={() => setSelectedId(item.id)} className={`w-full border p-4 text-left ${item.id === selectedId ? 'border-blue-600 bg-blue-50' : 'border-slate-200'}`}><div className="flex justify-between gap-3"><p className="font-bold text-blue-950">{item.collector}</p><Badge className={`border ${item.status === 'Accepted' ? 'bg-emerald-50 text-emerald-700' : item.status === 'Counter Sent' ? 'bg-blue-50 text-blue-700' : 'bg-amber-50 text-amber-700'}`}>{item.status}</Badge></div><p className="mt-2 text-sm text-slate-600">{item.material} @ ₹{item.askRate}/kg</p></button>)}</div></div><div className="border border-blue-200 bg-white p-5"><div className="flex items-center gap-2"><MessageSquare className="h-5 w-5 text-emerald-600" /><h2 className="text-xl font-bold text-blue-950">Counter offer · {offer.collector}</h2></div><div className="mt-5 grid gap-3 sm:grid-cols-2"><div className="bg-slate-50 p-4"><p className="text-xs text-slate-500">Collector ask rate</p><p className="mt-1 text-2xl font-bold text-blue-950">₹{offer.askRate}/kg</p></div><div className="bg-emerald-50 p-4"><p className="text-xs text-emerald-700">Factory target rate</p><p className="mt-1 text-2xl font-bold text-emerald-700">₹{offer.targetRate}/kg</p></div></div><label className="mt-5 block text-sm font-bold text-blue-950">Your Counter Price (₹/kg)<input type="number" min="0" value={counterRate} onChange={(event) => setCounterRate(event.target.value)} className="mt-2 h-11 w-full border border-slate-200 px-3 font-mono" /></label><p className="mt-3 bg-blue-50 p-4 text-right text-sm">Total lot value <strong className="ml-2 text-xl text-blue-900">₹{(Number(counterRate || 0) * offer.weight).toLocaleString('en-IN')}</strong></p><label className="mt-4 block text-sm font-bold text-blue-950">Quick message<input value={counterMessage} onChange={(event) => setCounterMessage(event.target.value)} className="mt-2 h-11 w-full border border-slate-200 px-3 text-sm" /></label><div className="mt-5 flex flex-wrap gap-3"><Button className="bg-blue-900 hover:bg-blue-800" onClick={() => onCounter(offer.id)}><MessageSquare className="mr-2 h-4 w-4" />Send Counter Offer / काउंटर भेजें</Button><Button className="bg-emerald-600 hover:bg-emerald-700" onClick={() => onAccept(offer.id)}><Check className="mr-2 h-4 w-4" />Accept Deal / सौदा पक्का करें</Button></div></div></section>; }
+function InspectionDrawer({ lot, statusClass, onClose, onUpdate, onManifest }: { lot: Lot; statusClass: (status: Status) => string; onClose: () => void; onUpdate: (status: Status) => void; onManifest: () => void }) { const [counterOpen, setCounterOpen] = useState(false); const [counter, setCounter] = useState(String(lot.askingRate - 10)); const [rejecting, setRejecting] = useState(false); const [reason, setReason] = useState(''); return <><div className="fixed inset-0 z-50 bg-blue-950/40" onClick={onClose} /><aside className="fixed inset-y-0 right-0 z-50 w-full max-w-xl overflow-y-auto border-l border-slate-200 bg-white p-6 shadow-2xl"><div className="flex items-start justify-between"><div><p className="text-xs font-bold uppercase tracking-wider text-emerald-700">Inspect Lot / लॉट जांच</p><h2 className="mt-1 text-2xl font-bold text-blue-950">{lot.id}</h2></div><button type="button" onClick={onClose} aria-label="Close"><X className="h-6 w-6 text-slate-500" /></button></div><div className="mt-5 flex items-center justify-between border-y border-slate-200 py-4"><div><p className="font-bold text-blue-950">{lot.material} / {lot.materialHi}</p><p className="mt-1 text-sm text-slate-500">{lot.weight.toFixed(1)} kg · {lot.date}</p></div><Badge className={`border ${statusClass(lot.status)}`}>{lot.status}</Badge></div><section className="mt-5"><p className="text-xs font-bold uppercase tracking-wider text-slate-500">Collector profile</p><div className="mt-3 border border-slate-200 p-4"><p className="font-bold text-blue-950">{lot.collector}</p><p className="mt-2 text-sm text-amber-600"><Star className="mr-1 inline h-4 w-4 fill-amber-400" />{lot.rating} Rating</p><p className="mt-1 text-sm text-slate-600">96% Weight Accuracy · <ShieldCheck className="inline h-4 w-4 text-emerald-600" /> CPCB Trust Verified</p></div></section><section className="mt-5"><p className="text-xs font-bold uppercase tracking-wider text-slate-500">Inspection details</p><div className="mt-3 grid grid-cols-2 gap-3"><div className="flex aspect-video items-center justify-center border border-slate-200 bg-slate-100 text-sm font-semibold text-slate-500">📷 Scrap photo preview</div><div className="border border-emerald-200 bg-emerald-50 p-4"><p className="text-xs text-slate-500">AI purity grade</p><p className="mt-2 font-bold text-emerald-700">{lot.purity}</p><p className="mt-4 text-xs text-slate-500">Asking price</p><p className="mt-1 font-bold text-blue-950">₹{lot.askingRate}/kg</p><p className="mt-1 text-sm font-bold text-emerald-700">Total: ₹{(lot.askingRate * lot.weight).toLocaleString('en-IN')}</p></div></div></section><div className="mt-6 space-y-3"><Button className="w-full bg-emerald-600 hover:bg-emerald-700" onClick={() => onUpdate('Approved')}><CheckCircle2 className="mr-2 h-4 w-4" />Approve & Schedule Pickup / स्वीकार करें</Button><Button variant="outline" className="w-full" onClick={() => setCounterOpen(!counterOpen)}>Make Counter Offer / नया भाव दें</Button>{counterOpen && <div className="border border-blue-200 bg-blue-50 p-4"><label className="text-sm font-bold text-blue-950">Counter price ₹/kg<input value={counter} onChange={(event) => setCounter(event.target.value)} type="number" className="mt-2 h-10 w-full border border-slate-200 bg-white px-3" /></label><p className="mt-2 text-right text-sm">New total: <strong>₹{(Number(counter || 0) * lot.weight).toLocaleString('en-IN')}</strong></p><Button className="mt-3 w-full bg-blue-900" onClick={() => onUpdate('Reviewed')}>Send counter offer</Button></div>}{rejecting ? <div className="border border-red-200 bg-red-50 p-4"><label className="text-sm font-bold text-red-900">Reason for rejection<input value={reason} onChange={(event) => setReason(event.target.value)} className="mt-2 h-10 w-full border border-red-200 bg-white px-3" placeholder="Explain the issue" /></label><Button className="mt-3 w-full bg-red-600 hover:bg-red-700" disabled={!reason.trim()} onClick={() => onUpdate('Rejected')}>Confirm rejection</Button></div> : <Button variant="outline" className="w-full border-red-200 text-red-700 hover:bg-red-50" onClick={() => setRejecting(true)}><X className="mr-2 h-4 w-4" />Reject Lot / अस्वीकार करें</Button>}<Button variant="outline" className="w-full" onClick={onManifest}><Download className="mr-2 h-4 w-4" />Download Manifest / CPCB पर्ची</Button></div></aside></>; }
+function LogOutIcon() { return <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10 17l5-5-5-5M15 12H3M21 3v18" /></svg>; }
+function ArrowRightIcon() { return <svg viewBox="0 0 24 24" className="ml-2 h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2"><path d="M5 12h14M13 6l6 6-6 6" /></svg>; }

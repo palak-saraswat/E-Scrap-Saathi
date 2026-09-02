@@ -148,31 +148,37 @@ export interface Database {
         Row: MaterialsCategory;
         Insert: MaterialsCategoryInsert;
         Update: MaterialsCategoryUpdate;
+        Relationships: [];
       };
       price_history: {
         Row: PriceHistory;
         Insert: PriceHistoryInsert;
         Update: PriceHistoryUpdate;
+        Relationships: [];
       };
       recyclers: {
         Row: Recycler;
         Insert: RecyclerInsert;
         Update: RecyclerUpdate;
+        Relationships: [];
       };
       collector_profiles: {
         Row: CollectorProfile;
         Insert: CollectorProfileInsert;
         Update: CollectorProfileUpdate;
+        Relationships: [];
       };
       lots: {
         Row: Lot;
         Insert: LotInsert;
         Update: LotUpdate;
+        Relationships: [];
       };
       transactions: {
         Row: Transaction;
         Insert: TransactionInsert;
         Update: TransactionUpdate;
+        Relationships: [];
       };
     };
     Views: Record<string, never>;

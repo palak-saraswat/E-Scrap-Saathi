@@ -1,5 +1,6 @@
-import { ReactNode } from 'react';
+import type { ReactNode } from 'react';
+import { AppShell } from '@/components/ecostream/app-shell';
 
 export default function RecyclerLayout({ children }: { children: ReactNode }) {
-  return <>{children}</>;
+  return <AppShell portal="recycler">{children}</AppShell>;
 }

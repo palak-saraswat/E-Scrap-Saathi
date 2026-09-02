@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Camera, LayoutDashboard, ShieldCheck, TrendingUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { ThemeToggle } from '@/components/ecostream/theme-toggle';
 
 type NavItem = {
   label: string;
@@ -45,6 +46,7 @@ export function BottomNav() {
             </Link>
           );
         })}
+        <ThemeToggle />
       </div>
     </nav>
   );
