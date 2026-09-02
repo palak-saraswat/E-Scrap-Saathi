@@ -2,6 +2,7 @@
 
 import { ChangeEvent, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -10,13 +11,15 @@ import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AlertTriangle, Camera, CheckCircle2, Pencil, Scale, Sparkles, Upload, Volume2 } from 'lucide-react';
 
-type CategoryKey = 'pcb' | 'cables' | 'batteries' | 'crt';
+type CategoryKey = 'smartphones' | 'laptops_it' | 'pcb' | 'cables' | 'batteries' | 'crt' | 'appliances' | 'other';
 type Analysis = {
   material_name_en: string;
   material_name_hi: string;
-  category_key: CategoryKey | 'laptops_it' | 'appliances' | 'other';
+  category_key: CategoryKey;
   detected_item: string;
   weight_kg: number;
+  rate_per_kg: number;
+  total_valuation: number;
   is_scale_verified: boolean;
   ocr_confidence: 'high' | 'medium' | 'low';
   is_hazardous: boolean;
@@ -61,14 +64,18 @@ export default function AddScrapPage() {
       formData.append('image', file);
       formData.append('selected_category', selectedCategory);
       const response = await fetch('/api/agents/vision', { method: 'POST', body: formData });
-      if (!response.ok) throw new Error('Vision analysis failed');
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null) as { error?: string } | null;
+        throw new Error(payload?.error || 'Vision analysis failed');
+      }
       const result = await response.json() as Analysis;
       setAnalysis(result);
-      setSelectedCategory(result.category_key === 'other' ? selectedCategory : result.category_key);
+      if (categories.some((category) => category.key === result.category_key)) setSelectedCategory(result.category_key);
       setWeight(result.weight_kg.toString());
       if (result.ocr_confidence === 'low') setError('OCR confidence is low. Please verify the weight manually.');
-    } catch {
-      setError('Vision analysis unavailable. Please verify the weight and material manually.');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Vision analysis failed';
+      setError(`Vision analysis unavailable: ${message}. Please verify the weight and material manually.`);
     } finally {
       setIsAnalyzing(false);
     }
@@ -116,10 +123,11 @@ export default function AddScrapPage() {
   }
 
   function continueToTrends() {
-    const lotId = `demo-lot-${Date.now()}`;
+    const lotId = `lot-${Date.now()}`;
     const finalWeight = Number(weight) || 0;
     localStorage.setItem(`scrap-lot:${lotId}`, JSON.stringify({ ...analysis, weight_kg: finalWeight }));
-    router.push(`/collector/trends?lot_id=${lotId}&category=${analysis?.category_key ?? selectedCategory}&weight=${finalWeight}`);
+    if (!analysis) return;
+    router.push(`/collector/trends?category=${analysis.category_key}&weight=${finalWeight}&item=${encodeURIComponent(analysis.detected_item)}&rate=${analysis.rate_per_kg}`);
   }
 
   return (
@@ -174,7 +182,7 @@ export default function AddScrapPage() {
       {(isAnalyzing || imageUrl) && (
         <Card className="overflow-hidden border-zinc-200">
           <div className="relative aspect-[4/3] bg-zinc-100">
-            {imageUrl && <img src={imageUrl} alt="Uploaded e-waste on a scale" className="h-full w-full object-cover" />}
+            {imageUrl && <Image src={imageUrl} alt="Uploaded e-waste on a scale" fill unoptimized className="object-cover" />}
             {isAnalyzing && <div className="absolute inset-x-0 top-1/2 h-1 animate-pulse bg-emerald-400 shadow-[0_0_18px_4px_rgba(52,211,153,0.8)]" />}
           </div>
           {isAnalyzing && <CardContent className="space-y-3 p-5"><div className="flex items-center gap-2 font-semibold"><Sparkles className="h-5 w-5 text-emerald-600" /> AI साथी जांच कर रहा है...</div><p className="text-sm text-zinc-600">Extracting weight & checking safety</p><Skeleton className="h-3 w-full" /><Skeleton className="h-3 w-3/4" /></CardContent>}

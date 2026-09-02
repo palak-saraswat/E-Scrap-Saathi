@@ -13,13 +13,13 @@ type Lot = { id: string; material: string; materialHi: string; weight: number; c
 type Offer = { id: string; collector: string; material: string; weight: number; askRate: number; targetRate: number; status: 'Pending' | 'Counter Sent' | 'Accepted'; message: string };
 
 const initialLots: Lot[] = [
-  { id: 'LOT-24091', material: 'Copper Cable', materialHi: 'तांबा तार', weight: 125, collector: 'Amit Kumar', rating: 4.9, date: '02 Sep 2026', status: 'Pending', askingRate: 470, purity: 'Grade A - 98% Copper' },
+  { id: 'LOT-24091', material: 'Copper Cable', materialHi: 'तांबा तार', weight: 125, collector: 'Verified Supplier', rating: 4.9, date: '02 Sep 2026', status: 'Pending', askingRate: 470, purity: 'Grade A - 98% Copper' },
   { id: 'LOT-24090', material: 'PCB Board', materialHi: 'मदरबोर्ड', weight: 250, collector: 'Rajesh Singh', rating: 4.7, date: '02 Sep 2026', status: 'Reviewed', askingRate: 335, purity: 'Grade A - high yield' },
   { id: 'LOT-24089', material: 'Lithium Battery', materialHi: 'बैटरी', weight: 80.2, collector: 'Priya Sharma', rating: 4.8, date: '01 Sep 2026', status: 'Approved', askingRate: 180, purity: 'Grade B - tested cells' },
   { id: 'LOT-24088', material: 'Mixed E-waste', materialHi: 'मिक्स ई-कचरा', weight: 420.5, collector: 'Dev Patel', rating: 4.5, date: '01 Sep 2026', status: 'Pending', askingRate: 210, purity: 'Grade B - sorted mix' },
 ];
 const initialOffers: Offer[] = [
-  { id: 'OFF-2048', collector: 'Amit Kumar', material: '125 kg Copper', weight: 125, askRate: 470, targetRate: 460, status: 'Pending', message: 'Pickup requested this week' },
+  { id: 'OFF-2048', collector: 'Verified Supplier', material: '125 kg Copper', weight: 125, askRate: 470, targetRate: 460, status: 'Pending', message: 'Pickup requested this week' },
   { id: 'OFF-2047', collector: 'Rajesh Singh', material: '250 kg PCB', weight: 250, askRate: 335, targetRate: 325, status: 'Pending', message: 'GST invoice available' },
 ];
 
@@ -38,7 +38,7 @@ export default function RecyclerDashboard() {
     setMounted(true); const handleHash = () => setActiveTab(window.location.hash === '#incoming-lots' ? 'incoming' : window.location.hash === '#negotiations' ? 'negotiations' : 'dashboard'); handleHash(); window.addEventListener('hashchange', handleHash); return () => window.removeEventListener('hashchange', handleHash); }, []);
   useEffect(() => { if (!toast) return; const timeout = window.setTimeout(() => setToast(''), 2800); return () => window.clearTimeout(timeout); }, [toast]);
 
-  const facilityName = mounted ? localStorage.getItem('recyclerName') || 'EcoRecycle Solutions' : 'EcoRecycle Solutions';
+  const facilityName = mounted ? localStorage.getItem('recyclerName') || 'Authorized Recycling Facility' : 'Authorized Recycling Facility';
   const filteredLots = useMemo(() => { const query = searchQuery.toLowerCase().trim(); return lots.filter((lot) => `${lot.id} ${lot.material} ${lot.materialHi} ${lot.collector}`.toLowerCase().includes(query)); }, [lots, searchQuery]);
   const changeTab = (tab: Tab) => { setActiveTab(tab); window.location.hash = tab === 'incoming' ? 'incoming-lots' : tab === 'negotiations' ? 'negotiations' : ''; };
   const updateLot = (status: Status) => { if (!selectedLot) return; setLots((current) => current.map((lot) => lot.id === selectedLot.id ? { ...lot, status } : lot)); setSelectedLot((current) => current ? { ...current, status } : current); setToast(status === 'Approved' ? 'Pickup approved and scheduled.' : status === 'Rejected' ? 'Lot rejected with notification.' : 'Lot status updated.'); };
