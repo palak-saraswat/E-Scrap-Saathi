@@ -32,7 +32,7 @@ function HandoverPageContent() {
   const [copied, setCopied] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
-  const [result, setResult] = useState<{ trust_score: number; total_earnings: number; tier: string } | null>(null);
+  const [result, setResult] = useState<{ trust_score: number; total_earnings: number; tier: string; loan_limit?: string } | null>(null);
 
   const qrCodeUrl = useMemo(
     () =>
@@ -59,21 +59,22 @@ function HandoverPageContent() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          lot_id: lotId,
-          recycler_id: recyclerId,
           amount,
           collector_phone: typeof window !== 'undefined' ? localStorage.getItem('collectorPhone') || '+91-9876543210' : '+91-9876543210',
-          previous_trust_score: 780,
+          current_score: 780,
+          weight_verified: true,
+          is_clean_handover: true,
           previous_earnings: 20125,
         }),
       });
 
       const payload = await response.json();
-      setResult(payload.profile ?? { trust_score: 800, total_earnings: 20125 + amount, tier: 'Tier 1' });
+      if (!response.ok) throw new Error('Trust update failed');
+      setResult(payload.profile ?? { trust_score: 805, total_earnings: 20125 + amount, tier: 'Tier 1 (Micro-Credit Eligible)' });
       setIsOpen(true);
       setTimeout(() => router.push('/collector/profile'), 1800);
     } catch {
-      const fallback = { trust_score: 800, total_earnings: 20125 + amount, tier: 'Tier 1' };
+      const fallback = { trust_score: 805, total_earnings: 20125 + amount, tier: 'Tier 1 (Micro-Credit Eligible)' };
       setResult(fallback);
       setIsOpen(true);
       setTimeout(() => router.push('/collector/profile'), 1800);
@@ -173,6 +174,7 @@ function HandoverPageContent() {
             <p className="font-semibold">Updated Trust Score: {result?.trust_score ?? 800}/1000</p>
             <p className="mt-1">Earnings ledger: ₹{(result?.total_earnings ?? 20125 + amount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
             <p className="mt-1">Tier: {result?.tier ?? 'Tier 1'}</p>
+            {result?.loan_limit ? <p className="mt-1">Credit: {result.loan_limit}</p> : null}
           </div>
 
           <DialogFooter>

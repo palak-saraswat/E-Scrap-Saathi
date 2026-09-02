@@ -1,62 +1,197 @@
 'use client';
-/* eslint-disable @next/next/no-img-element */
 
-import Link from 'next/link';
-import { ChangeEvent, DragEvent, useEffect, useRef, useState } from 'react';
-import { AlertTriangle, ArrowLeft, Camera, CheckCircle2, ImagePlus, LoaderCircle, RefreshCw, Scale, ShieldCheck, Upload, X } from 'lucide-react';
+import { ChangeEvent, useEffect, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { useLanguage } from '@/components/ecostream/language-provider';
+import { Skeleton } from '@/components/ui/skeleton';
+import { AlertTriangle, Camera, CheckCircle2, Pencil, Scale, Sparkles, Upload, Volume2 } from 'lucide-react';
 
-type MaterialKey = 'cables' | 'pcb' | 'batteries' | 'aluminium' | 'brass';
-type Analysis = { material_name_en: string; material_name_hi: string; category_key: MaterialKey; weight_kg: number | null; ocr_confidence: 'high' | 'medium' | 'low'; is_hazardous: boolean; hazard_warning_en?: string | null; hazard_warning_hi?: string | null; safety_action_hi?: string | null };
-const rates: Record<MaterialKey, number> = { cables: 470, pcb: 335, batteries: 180, aluminium: 185, brass: 390 };
-const materials: Array<[MaterialKey, string, string]> = [['cables', 'तांबा केबल', 'Copper Wire'], ['pcb', 'मदरबोर्ड', 'PCB Board'], ['batteries', 'बैटरी', 'Lithium Battery'], ['aluminium', 'एल्युमिनियम', 'Aluminium'], ['brass', 'पीतल', 'Brass']];
+type CategoryKey = 'pcb' | 'cables' | 'batteries' | 'crt';
+type Analysis = {
+  material_name_en: string;
+  material_name_hi: string;
+  category_key: CategoryKey | 'laptops_it' | 'appliances' | 'other';
+  detected_item: string;
+  weight_kg: number;
+  is_scale_verified: boolean;
+  ocr_confidence: 'high' | 'medium' | 'low';
+  is_hazardous: boolean;
+  hazard_title: string | null;
+  hazard_warning_hi: string | null;
+  safety_action_hi: string | null;
+};
+
+const categories: { key: CategoryKey; emoji: string; hi: string; en: string }[] = [
+  { key: 'pcb', emoji: '🖨', hi: 'प्रिंटेड सर्किट बोर्ड', en: 'PCBs' },
+  { key: 'cables', emoji: '🔌', hi: 'तांबे के तार', en: 'Copper Cables' },
+  { key: 'batteries', emoji: '🔋', hi: 'लिथियम बैटरी', en: 'Lithium Batteries' },
+  { key: 'crt', emoji: '📺', hi: 'सीआरटी स्क्रीन', en: 'CRT Screens' },
+];
 
 export default function AddScrapPage() {
-  const { language } = useLanguage();
-  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const router = useRouter();
   const uploadInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const [preview, setPreview] = useState<string | null>(null);
-  const [file, setFile] = useState<File | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<CategoryKey>('cables');
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
-  const [manualKey, setManualKey] = useState<MaterialKey>('cables');
   const [weight, setWeight] = useState('');
-  const [cameraOpen, setCameraOpen] = useState(false);
+  const [isEditingWeight, setIsEditingWeight] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [error, setError] = useState(false);
-  const hi = language === 'hi';
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [error, setError] = useState('');
+  const [cameraOpen, setCameraOpen] = useState(false);
 
-  useEffect(() => () => streamRef.current?.getTracks().forEach((track) => track.stop()), []);
-  async function startCamera() { try { const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false }); streamRef.current = stream; setCameraOpen(true); requestAnimationFrame(() => { if (videoRef.current) videoRef.current.srcObject = stream; }); } catch { cameraInputRef.current?.click(); } }
-  function stopCamera() { streamRef.current?.getTracks().forEach((track) => track.stop()); streamRef.current = null; setCameraOpen(false); }
-  function captureFrame() { const video = videoRef.current; if (!video?.videoWidth) return; const canvas = document.createElement('canvas'); canvas.width = video.videoWidth; canvas.height = video.videoHeight; canvas.getContext('2d')?.drawImage(video, 0, 0); canvas.toBlob((blob) => { if (blob) chooseFile(new File([blob], 'scrap-capture.jpg', { type: 'image/jpeg' })); }, 'image/jpeg', 0.92); stopCamera(); }
-  function chooseFile(nextFile: File) { if (!nextFile.type.startsWith('image/')) return; setFile(nextFile); setPreview(URL.createObjectURL(nextFile)); setAnalysis(null); setError(false); }
-  function onFileChange(event: ChangeEvent<HTMLInputElement>) { const nextFile = event.target.files?.[0]; if (nextFile) chooseFile(nextFile); }
-  function onDrop(event: DragEvent<HTMLDivElement>) { event.preventDefault(); const nextFile = event.dataTransfer.files[0]; if (nextFile) chooseFile(nextFile); }
-  async function scanWithAi() { if (!file) return; setIsAnalyzing(true); await new Promise((resolve) => setTimeout(resolve, 1500)); try { const body = new FormData(); body.append('image', file); const response = await fetch('/api/agents/vision', { method: 'POST', body }); if (!response.ok) throw new Error('scan failed'); const result = await response.json() as Analysis; setAnalysis(result); setManualKey(result.category_key in rates ? result.category_key : 'cables'); setWeight(result.weight_kg?.toString() ?? ''); setError(result.ocr_confidence === 'low'); } catch { setAnalysis(null); setError(true); } finally { setIsAnalyzing(false); } }
-  function reset() { setPreview(null); setFile(null); setAnalysis(null); setWeight(''); setError(false); if (cameraInputRef.current) cameraInputRef.current.value = ''; if (uploadInputRef.current) uploadInputRef.current.value = ''; }
-  const selectedKey = error || !analysis ? manualKey : analysis.category_key;
-  const selected = materials.find(([key]) => key === selectedKey) ?? materials[0];
-  const payout = Number(weight || 0) * rates[selectedKey];
+  useEffect(() => () => { if (imageUrl) URL.revokeObjectURL(imageUrl); streamRef.current?.getTracks().forEach((track) => track.stop()); }, [imageUrl]);
+
+  async function analyzeImage(file: File) {
+    setAnalysis(null);
+    setError('');
+    setIsAnalyzing(true);
+    const previewUrl = URL.createObjectURL(file);
+    setImageUrl(previewUrl);
+    try {
+      const formData = new FormData();
+      formData.append('image', file);
+      formData.append('selected_category', selectedCategory);
+      const response = await fetch('/api/agents/vision', { method: 'POST', body: formData });
+      if (!response.ok) throw new Error('Vision analysis failed');
+      const result = await response.json() as Analysis;
+      setAnalysis(result);
+      setSelectedCategory(result.category_key === 'other' ? selectedCategory : result.category_key);
+      setWeight(result.weight_kg.toString());
+      if (result.ocr_confidence === 'low') setError('OCR confidence is low. Please verify the weight manually.');
+    } catch {
+      setError('Vision analysis unavailable. Please verify the weight and material manually.');
+    } finally {
+      setIsAnalyzing(false);
+    }
+  }
+
+  function handleImage(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (file) void analyzeImage(file);
+  }
+
+  async function openCamera() {
+    setError('');
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
+      streamRef.current = stream;
+      setCameraOpen(true);
+      requestAnimationFrame(() => {
+        if (videoRef.current) videoRef.current.srcObject = stream;
+      });
+    } catch (error) {
+      console.error('Camera access error:', error);
+      setError('Camera access was denied or is unavailable. Please allow camera access or upload a photo from your device.');
+    }
+  }
+
+  function closeCamera() {
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+    streamRef.current = null;
+    setCameraOpen(false);
+  }
+
+  function capturePhoto() {
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    if (!video || !canvas || !video.videoWidth) return;
+    const scale = Math.min(800 / video.videoWidth, 600 / video.videoHeight, 1);
+    canvas.width = Math.round(video.videoWidth * scale);
+    canvas.height = Math.round(video.videoHeight * scale);
+    canvas.getContext('2d')?.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const imageDataUrl = canvas.toDataURL('image/jpeg', 0.7);
+    closeCamera();
+    const base64 = imageDataUrl.split(',')[1];
+    if (!base64) return;
+    void analyzeImage(new File([Uint8Array.from(atob(base64), (character) => character.charCodeAt(0))], 'camera-capture.jpg', { type: 'image/jpeg' }));
+  }
+
+  function continueToTrends() {
+    const lotId = `demo-lot-${Date.now()}`;
+    const finalWeight = Number(weight) || 0;
+    localStorage.setItem(`scrap-lot:${lotId}`, JSON.stringify({ ...analysis, weight_kg: finalWeight }));
+    router.push(`/collector/trends?lot_id=${lotId}&category=${analysis?.category_key ?? selectedCategory}&weight=${finalWeight}`);
+  }
 
   return (
-    <main className="min-h-screen bg-slate-50 px-5 py-6 pb-28 text-slate-950 lg:px-10">
-      <div className="mx-auto max-w-5xl space-y-6">
-        <header className="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3">
-          <Link href="/collector/dashboard" className="inline-flex items-center gap-2 text-sm font-bold text-blue-900"><ArrowLeft className="h-4 w-4" />{hi ? 'डैशबोर्ड' : 'Dashboard'}</Link>
-          <div className="text-center"><p className="text-xs font-bold text-emerald-700">● Live Bhav</p><p className="text-[11px] text-slate-600">Copper ₹470/kg · PCB ₹335/kg · Battery ₹180/kg</p></div>
-          <span className="text-xs font-bold text-blue-900">English / हिंदी</span>
-        </header>
-        <section><p className="text-xs font-bold uppercase tracking-[.2em] text-emerald-700">Saathi Scan / स्क्रैप स्कैन</p><h1 className="mt-2 text-3xl font-bold text-blue-950">{hi ? 'स्क्रैप की फोटो लें' : 'Scan your scrap'}</h1><p className="mt-2 text-sm text-slate-600">{hi ? 'फोटो से सही सामग्री और सही भाव तय करें।' : 'Capture the scrap clearly for a fair, verified price.'}</p></section>
-        {!preview && !cameraOpen && <section onDragOver={(event) => event.preventDefault()} onDrop={onDrop} className="border border-dashed border-blue-300 bg-white p-8 text-center"><ImagePlus className="mx-auto h-12 w-12 text-blue-600" /><h2 className="mt-4 text-xl font-bold text-blue-950">{hi ? 'तराजू और स्क्रैप साफ़ दिखाएं' : 'Show the scale and scrap clearly'}</h2><p className="mt-2 text-sm text-slate-500">{hi ? 'कैमरा खोलें या डिवाइस से फोटो डालें।' : 'Open the live camera or drag an image from your device.'}</p><div className="mt-6 flex flex-wrap justify-center gap-3"><Button onClick={startCamera} className="bg-blue-900 hover:bg-blue-800"><Camera className="mr-2 h-4 w-4" />{hi ? 'कैमरा खोलें' : 'Open camera'}</Button><Button variant="outline" onClick={() => uploadInputRef.current?.click()}><Upload className="mr-2 h-4 w-4" />{hi ? 'फोटो चुनें' : 'Upload from device'}</Button></div><input ref={cameraInputRef} type="file" accept="image/*" capture="environment" onChange={onFileChange} className="hidden" /><input ref={uploadInputRef} type="file" accept="image/*" onChange={onFileChange} className="hidden" /></section>}
-        {cameraOpen && <section className="border border-blue-200 bg-blue-950 p-4"><div className="relative overflow-hidden bg-black"><video ref={videoRef} autoPlay playsInline muted className="aspect-video w-full object-cover" /><div className="pointer-events-none absolute inset-6 border-2 border-emerald-400" /></div><div className="mt-4 flex gap-3"><Button onClick={captureFrame} className="flex-1 bg-emerald-600 hover:bg-emerald-700"><Camera className="mr-2 h-4 w-4" />Capture snapshot</Button><Button variant="outline" onClick={stopCamera} className="border-white text-white hover:bg-white/10"><X className="mr-2 h-4 w-4" />Close</Button></div></section>}
-        {preview && <section className="grid gap-5 lg:grid-cols-2"><div className="border border-slate-200 bg-white p-4"><div className="relative overflow-hidden bg-slate-100"><img src={preview} alt="Scrap preview" className="aspect-[4/3] w-full object-cover" />{isAnalyzing && <div className="absolute inset-x-0 top-1/2 h-1 animate-pulse bg-emerald-400" />}</div><Button variant="outline" onClick={reset} className="mt-4 w-full"><RefreshCw className="mr-2 h-4 w-4" />Retake / फोटो दोबारा लें</Button></div><div className="space-y-4">{isAnalyzing && <div className="border border-blue-200 bg-white p-6"><LoaderCircle className="h-7 w-7 animate-spin text-emerald-600" /><p className="mt-3 font-bold text-blue-950">पहचान हो रही है...</p><p className="text-sm text-slate-500">Identifying material purity & weight estimate...</p><div className="mt-5 space-y-3"><div className="h-3 animate-pulse bg-slate-200" /><div className="h-3 w-4/5 animate-pulse bg-slate-200" /></div></div>}{!isAnalyzing && !analysis && <Button onClick={scanWithAi} className="w-full animate-pulse bg-emerald-600 py-6 text-base hover:bg-emerald-700"><ShieldCheck className="mr-2 h-5 w-5" />AI से स्कैन करें / Analyze Scrap with AI</Button>}{!isAnalyzing && (analysis || error) && <>{error && <Alert className="border-amber-300 bg-amber-50 text-amber-950"><AlertTriangle className="h-4 w-4" /><AlertTitle>Could not confidently identify scrap / फोटो साफ नहीं है</AlertTitle><AlertDescription>Choose the material manually below so you can continue.</AlertDescription></Alert>}{analysis && <div className="border border-emerald-200 bg-emerald-50 p-5"><div className="flex items-start justify-between"><div><p className="text-xs font-bold uppercase tracking-wider text-emerald-700">Detected material</p><h2 className="mt-1 text-xl font-bold text-blue-950">{analysis.material_name_hi} ({analysis.material_name_en} - Grade A)</h2></div><Badge className="bg-emerald-600">96% Confidence</Badge></div><p className="mt-4 flex items-center gap-2 font-bold text-emerald-800"><CheckCircle2 className="h-4 w-4" />Live price: ₹{rates[selectedKey]}/kg</p></div>}<label className="block text-sm font-bold text-blue-950">Manual override / सामान चुनें<select value={selectedKey} onChange={(event) => setManualKey(event.target.value as MaterialKey)} className="mt-2 h-11 w-full border border-slate-200 bg-white px-3"><option value="cables">तांबा केबल / Copper</option><option value="pcb">मदरबोर्ड / PCB</option><option value="batteries">बैटरी / Lithium Battery</option><option value="aluminium">एल्युमिनियम / Aluminum</option><option value="brass">पीतल / Brass</option></select></label><div className="border border-slate-200 bg-white p-4"><div className="flex items-center gap-2 text-sm font-bold text-blue-950"><Scale className="h-4 w-4 text-emerald-600" />Instant valuation / तुरंत कमाई</div><div className="mt-3 flex items-end gap-3"><label className="flex-1 text-xs font-bold text-slate-500">Weight in KG<Input type="number" min="0" step="0.1" value={weight} onChange={(event) => setWeight(event.target.value)} className="mt-1 h-11" /></label><div className="bg-emerald-50 px-4 py-2 text-right"><p className="text-xs text-slate-500">Estimated payout</p><p className="text-2xl font-bold text-emerald-700">₹{payout.toLocaleString('en-IN')}</p></div></div><p className="mt-3 text-xs text-slate-500">{selected[1]} · ₹{rates[selectedKey]}/kg</p></div><Link href="/collector/dashboard" className="flex w-full items-center justify-center bg-blue-900 py-3 text-sm font-bold text-white hover:bg-blue-800">रीसाइक्लर को ऑफ़र भेजें / Send to Verified Recycler</Link></>}</div></section>}
-      </div>
+    <main className="space-y-5 px-4 pb-28 pt-6">
+      <header>
+        <p className="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">Saathi Vision</p>
+        <h1 className="text-2xl font-bold text-zinc-950">📸 कबाड़ स्कैन करें</h1>
+        <p className="mt-1 text-sm text-zinc-600">Scan Scrap for weight and safety check</p>
+      </header>
+
+      {!imageUrl && !isAnalyzing && !analysis && (
+        <>
+          <section className="space-y-3">
+            <h2 className="font-semibold text-zinc-900">कबाड़ की श्रेणी चुनें</h2>
+            <div className="grid grid-cols-2 gap-3">
+              {categories.map((category) => (
+                <button type="button" key={category.key} onClick={() => setSelectedCategory(category.key)} className={`min-h-28 rounded-xl border-2 p-3 text-left transition ${selectedCategory === category.key ? 'border-emerald-500 bg-emerald-50 shadow-sm' : 'border-zinc-200 bg-white'}`}>
+                  <span className="text-2xl">{category.emoji}</span>
+                  <span className="mt-2 block text-sm font-semibold text-zinc-900">{category.hi}</span>
+                  <span className="block text-xs text-zinc-500">{category.en}</span>
+                </button>
+              ))}
+            </div>
+          </section>
+          <Card className="border-emerald-200 bg-emerald-50/70">
+            <CardContent className="p-5 text-center">
+              <Camera className="mx-auto mb-3 h-12 w-12 text-emerald-700" />
+              <div className="grid grid-cols-2 gap-3">
+                <Button size="lg" className="h-12 bg-emerald-700 hover:bg-emerald-800" onClick={openCamera}><Camera className="mr-2 h-5 w-5" /> Open camera</Button>
+                <Button size="lg" variant="outline" className="h-12" onClick={() => uploadInputRef.current?.click()}><Upload className="mr-2 h-5 w-5" /> Upload from device</Button>
+              </div>
+              <p className="mt-3 text-xs leading-5 text-emerald-950">फोटो में तराजू का डिजिटल मीटर साफ़ दिखना चाहिए<br />(Scale display should be clearly visible)</p>
+              <input ref={uploadInputRef} className="hidden" type="file" accept="image/*" onChange={handleImage} />
+              <canvas ref={canvasRef} className="hidden" aria-hidden="true" />
+            </CardContent>
+          </Card>
+        </>
+      )}
+
+      {cameraOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" role="dialog" aria-modal="true" aria-label="Live camera viewfinder">
+          <div className="w-full max-w-md rounded-2xl bg-white p-4 shadow-xl">
+            <video ref={videoRef} autoPlay playsInline muted className="aspect-[4/3] w-full rounded-xl bg-black object-cover" />
+            <div className="mt-4 grid grid-cols-2 gap-3">
+              <Button type="button" size="lg" className="h-12 bg-emerald-700 hover:bg-emerald-800" onClick={capturePhoto}><Camera className="mr-2 h-5 w-5" /> Snap Photo (फोटो खींचें)</Button>
+              <Button type="button" size="lg" variant="outline" className="h-12" onClick={closeCamera}>✕ Cancel</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {(isAnalyzing || imageUrl) && (
+        <Card className="overflow-hidden border-zinc-200">
+          <div className="relative aspect-[4/3] bg-zinc-100">
+            {imageUrl && <img src={imageUrl} alt="Uploaded e-waste on a scale" className="h-full w-full object-cover" />}
+            {isAnalyzing && <div className="absolute inset-x-0 top-1/2 h-1 animate-pulse bg-emerald-400 shadow-[0_0_18px_4px_rgba(52,211,153,0.8)]" />}
+          </div>
+          {isAnalyzing && <CardContent className="space-y-3 p-5"><div className="flex items-center gap-2 font-semibold"><Sparkles className="h-5 w-5 text-emerald-600" /> AI साथी जांच कर रहा है...</div><p className="text-sm text-zinc-600">Extracting weight & checking safety</p><Skeleton className="h-3 w-full" /><Skeleton className="h-3 w-3/4" /></CardContent>}
+        </Card>
+      )}
+
+      {error && !isAnalyzing && <Alert className="border-amber-300 bg-amber-50 text-amber-950"><AlertTriangle className="h-4 w-4" /><AlertTitle>Review scan result</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>}
+
+      {analysis && !isAnalyzing && (
+        <div className="space-y-4">
+          <Card className="border-emerald-200 bg-emerald-50/50"><CardContent className="flex items-center justify-between p-4"><div><p className="text-xs text-zinc-600">पहचाना गया सामान</p><p className="font-bold text-zinc-950">{analysis.material_name_hi} ({analysis.detected_item})</p><p className="text-sm text-zinc-600">{analysis.material_name_en}</p></div><Badge className="bg-emerald-600 text-white">{analysis.ocr_confidence} confidence</Badge></CardContent></Card>
+          <Card><CardHeader className="pb-2"><CardTitle className="flex items-center gap-2 text-base"><Scale className="h-5 w-5 text-emerald-700" /> तराजू का वजन</CardTitle></CardHeader><CardContent>{isEditingWeight ? <div className="flex gap-2"><Input aria-label="Weight in kilograms" type="number" step="0.01" value={weight} onChange={(event) => setWeight(event.target.value)} autoFocus /><Button type="button" onClick={() => setIsEditingWeight(false)}>Done</Button></div> : <div className="flex items-end justify-between"><p className="text-4xl font-bold tracking-tight text-zinc-950">{weight || 'N/A'} <span className="text-lg font-medium text-zinc-500">kg</span></p><Button variant="outline" size="sm" onClick={() => setIsEditingWeight(true)}><Pencil className="mr-1 h-3.5 w-3.5" /> Edit</Button></div>}<Badge variant="outline" className="mt-3 border-emerald-300 text-emerald-700"><CheckCircle2 className="mr-1 h-3.5 w-3.5" /> {analysis.is_scale_verified ? 'Digital Scale OCR Verified' : 'Estimated by AI'}</Badge></CardContent></Card>
+          {analysis.is_hazardous && <Alert className="border-red-300 bg-red-50 text-red-950"><AlertTriangle className="h-5 w-5" /><AlertTitle>⚠️ खतरा चेतावनी (Hazard Alert)</AlertTitle><AlertDescription className="text-red-900">{analysis.hazard_title ? `${analysis.hazard_title}: ` : ''}{analysis.hazard_warning_hi}<br /><span className="text-xs">{analysis.safety_action_hi}</span></AlertDescription><Button type="button" variant="ghost" size="icon" className="absolute right-2 top-2 text-red-700" aria-label="Read hazard warning aloud" onClick={() => setIsSpeaking((value) => !value)}><Volume2 className={isSpeaking ? 'animate-pulse' : ''} /></Button></Alert>}
+          <Button size="lg" className="h-12 w-full bg-emerald-700 text-sm hover:bg-emerald-800" onClick={continueToTrends}>📊 आज का भाव और ट्रेंड देखें</Button>
+          <Button variant="outline" className="w-full" onClick={() => { setImageUrl(null); setAnalysis(null); setWeight(''); setError(''); if (uploadInputRef.current) uploadInputRef.current.value = ''; }}>Scan another item</Button>
+        </div>
+      )}
     </main>
   );
 }

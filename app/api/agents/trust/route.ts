@@ -8,73 +8,36 @@ function toNumber(value: unknown, fallback = 0) {
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
-    const collectorPhone = String(body.collector_phone ?? '+91-9876543210');
-    const amount = toNumber(body.amount ?? 5625, 5625);
-    const previousTrust = Math.max(0, toNumber(body.previous_trust_score ?? 780, 780));
-    const previousEarnings = Math.max(0, toNumber(body.previous_earnings ?? 20125, 20125));
-
-    const weightAccuracyScore = 10;
-    const safetyComplianceScore = 5;
-    const transactionConsistencyScore = 5;
-    const updatedTrust = Math.min(1000, previousTrust + weightAccuracyScore + safetyComplianceScore + transactionConsistencyScore);
-    const updatedEarnings = previousEarnings + amount;
-    const weightAccuracyPct = 96.5;
-    const microCreditEligible = updatedTrust >= 800;
+    const body = await request.json() as Record<string, unknown>;
+    const currentScore = Math.min(1000, Math.max(0, toNumber(body.current_score ?? body.previous_trust_score, 780)));
+    const weightVerified = Boolean(body.weight_verified ?? true);
+    const cleanHandover = Boolean(body.is_clean_handover ?? !(body.is_hazardous ?? false));
+    const updatedScore = Math.min(1000, currentScore + (weightVerified ? 15 : 0) + (cleanHandover ? 10 : 0));
+    const amount = Math.max(0, toNumber(body.amount, 0));
+    const previousEarnings = Math.max(0, toNumber(body.previous_earnings, 0));
+    const tier = updatedScore >= 800 ? 'Tier 1 (Micro-Credit Eligible)' : updatedScore >= 700 ? 'Tier 2' : 'Tier 3';
+    const profile = {
+      trust_score: updatedScore,
+      total_earnings: Number((previousEarnings + amount).toFixed(2)),
+      tier,
+      loan_limit: updatedScore >= 800 ? '₹25,000 for E-Rickshaw / Safety Gear' : 'Build more verified handovers to unlock micro-credit',
+      weight_verified: weightVerified,
+      is_clean_handover: cleanHandover,
+    };
 
     try {
       const supabase = await getSupabaseServerClient();
-      const normalizedPhone = collectorPhone.trim();
-      const { data: existing } = await supabase
-        .from('collector_profiles')
-        .select('*')
-        .eq('phone', normalizedPhone)
-        .maybeSingle();
-
-      const existingProfile = (existing || null) as { id?: string; phone?: string; name?: string } | null;
-
-      if (existingProfile?.id) {
-        await supabase
-          .from('collector_profiles')
-          .update({
-            trust_score: updatedTrust,
-            total_earnings: updatedEarnings,
-            weight_accuracy_pct: weightAccuracyPct,
-          } as any)
-          .eq('id', existingProfile.id);
-      } else {
-        await supabase.from('collector_profiles').insert({
-          phone: normalizedPhone,
-          name: 'Amit Kumar',
-          trust_score: updatedTrust,
-          total_earnings: updatedEarnings,
-          weight_accuracy_pct: weightAccuracyPct,
-        } as any);
-      }
+      const phone = String(body.collector_phone || '+91-9876543210');
+      const { data: existing } = await supabase.from('collector_profiles').select('id').eq('phone', phone).maybeSingle();
+      const payload = { trust_score: updatedScore, total_earnings: previousEarnings + amount, weight_accuracy_pct: weightVerified ? 100 : 0 };
+      if (existing && typeof existing === 'object' && 'id' in existing) await supabase.from('collector_profiles').update(payload as never).eq('id', String(existing.id));
+      else await supabase.from('collector_profiles').insert({ phone, name: 'Saathi Collector', ...payload } as never);
     } catch {
-      // Fallback for local/demo mode when Supabase is not ready.
+      // Demo mode remains usable when Supabase is not configured.
     }
 
-    const tier = updatedTrust >= 900 ? 'Tier 1' : updatedTrust >= 800 ? 'Tier 1' : updatedTrust >= 700 ? 'Tier 2' : 'Tier 3';
-
-    return NextResponse.json({
-      status: 'success',
-      message: 'Handover verified and trust score updated.',
-      profile: {
-        trust_score: updatedTrust,
-        total_earnings: Number(updatedEarnings.toFixed(2)),
-        weight_accuracy_pct: Number(weightAccuracyPct.toFixed(1)),
-        micro_credit_eligible: microCreditEligible,
-        tier,
-      },
-    });
+    return NextResponse.json({ status: 'success', message: 'Handover verified and trust score updated.', profile });
   } catch (error) {
-    return NextResponse.json(
-      {
-        status: 'error',
-        message: error instanceof Error ? error.message : 'Trust profile update failed',
-      },
-      { status: 500 }
-    );
+    return NextResponse.json({ status: 'error', message: error instanceof Error ? error.message : 'Trust evaluation failed' }, { status: 400 });
   }
 }
