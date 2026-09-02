@@ -38,8 +38,11 @@ function cleanJson(text: string) {
 }
 
 function validCategory(value: unknown): CategoryKey {
-  return value && value in benchmarks ? value as CategoryKey : 'other';
+  return typeof value === 'string' && value in benchmarks
+    ? (value as CategoryKey)
+    : 'other';
 }
+
 
 async function readImage(request: NextRequest) {
   if ((request.headers.get('content-type') || '').includes('multipart/form-data')) {
